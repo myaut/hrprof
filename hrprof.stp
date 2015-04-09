@@ -1,0 +1,35 @@
+#!/usr/local/bin/stap -g
+
+%{
+
+#include <linux/types.h>
+#include <linux/sched.h>
+#define HRPROF_QUEUE_LEN		40
+
+extern unsigned long hrprof_resolution;
+extern int hrprof_get(u64* array, int n);
+
+%}
+
+function hrprof_print(prefix: string, n: long) %{
+	u64 array[HRPROF_QUEUE_LEN];
+	int count, i;
+	u64 now, time;
+	
+	now = local_clock();
+	
+	count = hrprof_get(array, STAP_ARG_n);
+	
+	for(i = STAP_ARG_n - count; i < STAP_ARG_n; ++i) {
+		time = now - ((STAP_ARG_n - i) * hrprof_resolution);
+		
+		_stp_printf("%s %lld %lld\n", 
+					STAP_ARG_prefix,
+		            (unsigned long long) time, 
+		            (unsigned long long) array[i]);
+	}
+%}
+
+probe timer.profile {
+	hrprof_print(sprintf("hrprof %d", cpu()), 5);
+}
